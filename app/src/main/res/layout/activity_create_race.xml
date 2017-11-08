@@ -1,9 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#ededed"
     tools:context="ph.edu.dlsu.mobapde.tara.CreateRaceActivity">
 
-</android.support.constraint.ConstraintLayout>
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="← New Meeting"
+        android:layout_margin="15dp"
+        android:textSize="20sp"
+        android:id="@+id/tv_back"/>
+
+    <EditText
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
+        android:layout_marginBottom="10dp"
+        android:padding="10dp"
+        android:paddingTop="25dp"
+        android:paddingBottom="25dp"
+        android:textSize="20sp"
+        android:background="#f9f9f9"
+        android:hint="Title"
+
+        android:id="@+id/et_title"/>
+
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
+        android:layout_marginBottom="10dp"
+        android:text="Location"
+        android:paddingLeft="10dp"
+        android:textSize="20sp"
+        android:background="#f9f9f9"
+        android:gravity="left|center_vertical"
+        android:textAllCaps="false"
+        android:id="@+id/button_location"/>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:onClick="showDatePickerDialog"
+        android:id="@+id/ll_pickdate">
+
+        <Button
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp"
+            android:layout_marginBottom="10dp"
+            android:text="Date"
+            android:paddingLeft="10dp"
+            android:textSize="20sp"
+            android:background="#f9f9f9"
+            android:gravity="left|center_vertical"
+            android:textAllCaps="false"
+            android:onClick="showDatePickerDialog"
+            android:id="@+id/button_date"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:onClick="showTimePickerDialog"
+        android:id="@+id/ll_picktime">
+
+        <Button
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="20dp"
+            android:layout_marginBottom="10dp"
+            android:text="Time"
+            android:paddingLeft="10dp"
+            android:textSize="20sp"
+            android:background="#f9f9f9"
+            android:gravity="left|center_vertical"
+            android:textAllCaps="false"
+            android:onClick="showTimePickerDialog"
+            android:id="@+id/button_time"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:gravity="center|bottom"
+        android:layout_weight="1">
+
+        <Button
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="30dp"
+            android:layout_gravity="center"
+            android:text="Create Meeting"
+            android:textSize="15sp"
+            android:id="@+id/button_createmeeting"/>
+    </LinearLayout>
+
+
+</LinearLayout>
