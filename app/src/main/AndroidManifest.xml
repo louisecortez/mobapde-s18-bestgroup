@@ -19,7 +19,11 @@
         <activity android:name=".SignUpActivity" />
         <activity android:name=".LogInActivity" />
         <activity android:name=".CurrentRaceActivity" />
+<<<<<<< HEAD
         <activity android:name=".MainActivity" />
+=======
+        <activity android:name=".CreateRaceActivity" />
+>>>>>>> 4d563493c451a47b53edc43e8f7412b50ed2bfd0
         <activity android:name=".SelectLocActivity" />
         <activity android:name=".ProfileActivity"></activity>
     </application>
