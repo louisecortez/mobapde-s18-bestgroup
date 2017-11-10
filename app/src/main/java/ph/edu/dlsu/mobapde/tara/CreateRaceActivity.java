@@ -1,12 +1,10 @@
 package ph.edu.dlsu.mobapde.tara;
 
 import android.app.DatePickerDialog;
-import android.app.Dialog;
 import android.app.TimePickerDialog;
-import android.support.v4.app.DialogFragment;
+import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.text.format.DateFormat;
 import android.view.View;
 import android.widget.Button;
 import android.widget.DatePicker;
@@ -15,6 +13,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.TimePicker;
 import android.widget.Toast;
+
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.ui.PlacePicker;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -30,9 +33,12 @@ public class CreateRaceActivity extends AppCompatActivity {
     LinearLayout llDate;
     LinearLayout llTime;
 
+    Button buttonLocation;
     Button buttonDate;
     Button buttonTime;
     Button buttonCreateMeeting;
+
+    int LOCATION_REQUEST = 0; // location request code for intent
 
     static int chosenMonth, chosenDay, chosenYear;
     static int chosenHour, chosenMinute;
@@ -40,18 +46,50 @@ public class CreateRaceActivity extends AppCompatActivity {
 
     SimpleDateFormat sdfDate;
 
+    // attributes for race being created
+    Race currentRace;
+    String currentTitle;
+    Date currentDate;
+    Place currentPlace;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_create_race);
 
         tvBack = (TextView) findViewById(R.id.tv_back);
+
         etTitle = (EditText) findViewById(R.id.et_title);
+
         llDate = (LinearLayout) findViewById(R.id.ll_pickdate);
         llTime = (LinearLayout) findViewById(R.id.ll_picktime);
+
+        buttonLocation = (Button) findViewById(R.id.button_location);
         buttonDate = (Button) findViewById(R.id.button_date);
         buttonTime =(Button) findViewById(R.id.button_time);
         buttonCreateMeeting = (Button) findViewById(R.id.button_createmeeting);
+
+        buttonLocation.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onLocationClick();
+            }
+        });
+
+        buttonDate.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onDateClick();
+            }
+        });
+
+        buttonTime.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onTimeClick();
+            }
+        });
 
         buttonCreateMeeting.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -63,62 +101,6 @@ public class CreateRaceActivity extends AppCompatActivity {
                 }
             }
         });
-    }
-
-    public void showDatePickerDialog(View v) {
-        DialogFragment newFragment = new DatePickerFragment();
-        newFragment.show(getSupportFragmentManager(), "datePicker");
-    }
-
-    public void showTimePickerDialog(View v) {
-        DialogFragment newFragment = new TimePickerFragment();
-        newFragment.show(getSupportFragmentManager(), "timePicker");
-    }
-
-    public static class DatePickerFragment extends DialogFragment
-            implements DatePickerDialog.OnDateSetListener {
-
-        @Override
-        public Dialog onCreateDialog(Bundle savedInstanceState) {
-            // Use the current date as the default date in the picker
-            final Calendar c = Calendar.getInstance();
-            int year = c.get(Calendar.YEAR);
-            int month = c.get(Calendar.MONTH);
-            int day = c.get(Calendar.DAY_OF_MONTH);
-
-            // Create a new instance of DatePickerDialog and return it
-            DatePickerDialog dpd = new DatePickerDialog(getActivity(), this, year, month, day);
-            dpd.getDatePicker().setMinDate(System.currentTimeMillis() - 10000);
-
-            return dpd;
-        }public void onDateSet(DatePicker view, int year, int month, int day) {
-            // Do something with the date chosen by the user
-            chosenDay = day;
-            chosenMonth = month;
-            chosenYear = year;
-        }
-    }
-
-    public static class TimePickerFragment extends DialogFragment
-            implements TimePickerDialog.OnTimeSetListener {
-
-        @Override
-        public Dialog onCreateDialog(Bundle savedInstanceState) {
-            // Use the current time as the default values for the picker
-            final Calendar c = Calendar.getInstance();
-            int hour = c.get(Calendar.HOUR_OF_DAY);
-            int minute = c.get(Calendar.MINUTE);
-
-            // Create a new instance of TimePickerDialog and return it
-            return new TimePickerDialog(getActivity(), this, hour, minute,
-                    DateFormat.is24HourFormat(getActivity()));
-        }
-
-        public void onTimeSet(TimePicker view, int hourOfDay, int minute) {
-            // Do something with the time chosen by the user
-            chosenHour = hourOfDay;
-            chosenMinute = minute;
-        }
     }
 
     public void onCreateRaceButtonClick() throws ParseException {
@@ -137,11 +119,84 @@ public class CreateRaceActivity extends AppCompatActivity {
         }
 
         sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        Date date = sdfDate.parse(chosenYear + "-" + (chosenMonth + 1) + "-" + chosenDay
+        currentDate = sdfDate.parse(chosenYear + "-" + (chosenMonth + 1) + "-" + chosenDay
                     + " " + chosenHour + ":" + chosenMinute + ":59");
 
-        Race newRace = new Race(etTitle.getText().toString(), "LOCATION", date);
-        Toast t = Toast.makeText(getBaseContext(), "Created: " + newRace.toString(), Toast.LENGTH_LONG);
+        currentTitle = etTitle.getText().toString();
+
+        currentRace = new Race(currentTitle, currentPlace, currentDate);
+        Toast t = Toast.makeText(getBaseContext(), "Created: " + currentRace.toString(), Toast.LENGTH_LONG);
         t.show();
+    }
+
+    public void onLocationClick() {
+        PlacePicker.IntentBuilder ppBuilder = new PlacePicker.IntentBuilder();
+
+        try {
+            Intent i = ppBuilder.build(this);
+            startActivityForResult(i, LOCATION_REQUEST);
+        } catch (GooglePlayServicesRepairableException e) {
+            e.printStackTrace();
+        } catch (GooglePlayServicesNotAvailableException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void onDateClick() {
+        final Calendar c = Calendar.getInstance();
+        int mYear = c.get(Calendar.YEAR);
+        int mMonth = c.get(Calendar.MONTH);
+        int mDay = c.get(Calendar.DAY_OF_MONTH);
+
+
+        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
+                new DatePickerDialog.OnDateSetListener() {
+
+                    @Override
+                    public void onDateSet(DatePicker view, int year,
+                                          int monthOfYear, int dayOfMonth) {
+                        chosenDay = dayOfMonth;
+                        chosenMonth = monthOfYear;
+                        chosenYear = year;
+
+                        buttonDate.setText(dayOfMonth + "/" + (monthOfYear + 1) + "/" + year);
+
+                    }
+                }, mYear, mMonth, mDay);
+        datePickerDialog.show();
+    }
+
+    public void onTimeClick() {
+        // Get Current Time
+        final Calendar c = Calendar.getInstance();
+        int mHour = c.get(Calendar.HOUR_OF_DAY);
+        int mMinute = c.get(Calendar.MINUTE);
+
+        // Launch Time Picker Dialog
+        TimePickerDialog timePickerDialog = new TimePickerDialog(this,
+                new TimePickerDialog.OnTimeSetListener() {
+
+                    @Override
+                    public void onTimeSet(TimePicker view, int hourOfDay,
+                                          int minute) {
+
+                        chosenHour = hourOfDay;
+                        chosenMinute = minute;
+
+                        buttonTime.setText(hourOfDay + ":" + minute);
+                    }
+                }, mHour, mMinute, false);
+        timePickerDialog.show();
+    }
+
+    // accepts and processes results from intent
+    protected  void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if(requestCode == LOCATION_REQUEST) {
+            if(resultCode == RESULT_OK) {
+                currentPlace = PlacePicker.getPlace(getBaseContext(), data);
+                String address = currentPlace.getName().toString();
+                buttonLocation.setText(address);
+            }
+        }
     }
 }

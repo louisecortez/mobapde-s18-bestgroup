@@ -2,7 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="ph.edu.dlsu.mobapde.tara">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <application
+        android:name="android.support.multidex.MultiDexApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -19,13 +23,15 @@
         <activity android:name=".SignUpActivity" />
         <activity android:name=".LogInActivity" />
         <activity android:name=".CurrentRaceActivity" />
-<<<<<<< HEAD
         <activity android:name=".MainActivity" />
-=======
-        <activity android:name=".CreateRaceActivity" />
->>>>>>> 4d563493c451a47b53edc43e8f7412b50ed2bfd0
         <activity android:name=".SelectLocActivity" />
-        <activity android:name=".ProfileActivity"></activity>
+        <activity android:name=".ProfileActivity" />
+
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="@string/google_place_picker" />
+
+        <activity android:name=".HomeActivity"></activity>
     </application>
 
 </manifest>

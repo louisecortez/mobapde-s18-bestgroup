@@ -1,5 +1,7 @@
 package ph.edu.dlsu.mobapde.tara;
 
+import com.google.android.gms.location.places.Place;
+
 import java.util.ArrayList;
 import java.util.Date;
 
@@ -10,12 +12,13 @@ import java.util.Date;
 public class Race {
     private long id;
     private String title;
-    private String location;
+    private Place location;
     private Date date;
 
     private ArrayList<User> users;
+    private boolean inProgress;
 
-    public Race(String title, String location, Date date) {
+    public Race(String title, Place location, Date date) {
         this.title = title;
         this.location = location;
         this.date = date;
@@ -38,11 +41,11 @@ public class Race {
         this.title = title;
     }
 
-    public String getLocation() {
+    public Place getLocation() {
         return location;
     }
 
-    public void setLocation(String location) {
+    public void setLocation(Place location) {
         this.location = location;
     }
 
@@ -75,14 +78,23 @@ public class Race {
         return users.get(id);
     }
 
+    public boolean isInProgress() {
+        return inProgress;
+    }
+
+    public void setInProgress(boolean inProgress) {
+        this.inProgress = inProgress;
+    }
+
     @Override
     public String toString() {
         return "Race{" +
                 "id=" + id +
                 ", title='" + title + '\'' +
-                ", location='" + location + '\'' +
+                ", location=" + location +
                 ", date=" + date +
                 ", users=" + users +
+                ", inProgress=" + inProgress +
                 '}';
     }
 }
