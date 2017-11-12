@@ -1,6 +1,8 @@
 package ph.edu.dlsu.mobapde.tara;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -100,8 +102,15 @@ public class LogInActivity extends AppCompatActivity implements View.OnClickList
             @Override
             public void onComplete(@NonNull Task<AuthResult> task) {
                 if(task.isSuccessful()){
+                    String name = etemail.getText().toString();
+                    SharedPreferences dsp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+
+                    SharedPreferences.Editor dspEditor = dsp.edit();
+                    dspEditor.putString("name", name);
+                    dspEditor.commit();
+
                     progressbar.setVisibility(View.GONE);
-                    Intent intent = new Intent(LogInActivity.this, ProfileActivity.class);
+                    Intent intent = new Intent(LogInActivity.this, HomeActivity.class);
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                     startActivity(intent);
 

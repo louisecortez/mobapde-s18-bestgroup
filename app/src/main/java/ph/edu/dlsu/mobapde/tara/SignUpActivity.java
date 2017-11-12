@@ -1,6 +1,8 @@
 package ph.edu.dlsu.mobapde.tara;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -117,10 +119,17 @@ public class SignUpActivity extends AppCompatActivity implements View.OnClickLis
                     @Override
                     public void onComplete(@NonNull Task<AuthResult> task) {
                         if (task.isSuccessful()) {
+                            String name = etsemail.getText().toString();
+                            SharedPreferences dsp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+
+                            SharedPreferences.Editor dspEditor = dsp.edit();
+                            dspEditor.putString("name", name);
+                            dspEditor.commit();
+
                             progressbar.setVisibility(View.GONE);
                             Toast.makeText(getBaseContext(), "User registered!",
                                     Toast.LENGTH_SHORT).show();
-                            Intent intent = new Intent(SignUpActivity.this, ProfileActivity.class);
+                            Intent intent = new Intent(SignUpActivity.this, HomeActivity.class);
                             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                             startActivity(intent);
 
