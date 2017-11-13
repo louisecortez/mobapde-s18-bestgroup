@@ -5,6 +5,9 @@
     android:id="@+id/main_content"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#fcfcfc"
+    app:tabTextColor="@color/colorPrimaryDark"
+    app:tabSelectedTextColor="@color/colorAccent"
     style="@style/MyCustomTabLayout"
     android:fitsSystemWindows="true"
     tools:context="ph.edu.dlsu.mobapde.tara.HomeActivity">
@@ -23,6 +26,21 @@
             android:background="?attr/colorPrimary"
             app:layout_scrollFlags="scroll|enterAlways"
             app:popupTheme="@style/AppTheme.PopupOverlay">
+
+            <Button
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="U"
+                android:id="@+id/bt_user"
+                android:background="@drawable/round_button"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tara"
+                android:textColor="@color/colorPrimaryDark"
+                android:layout_marginLeft="25dp"
+                android:textSize="20dp"/>
 
         </android.support.v7.widget.Toolbar>
 

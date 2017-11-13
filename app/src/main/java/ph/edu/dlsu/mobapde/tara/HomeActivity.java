@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.TabLayout;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 
 import android.support.v4.app.Fragment;
@@ -13,6 +14,7 @@ import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.Button;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +30,7 @@ public class HomeActivity extends AppCompatActivity {
      */
     private SectionsPagerAdapter mSectionsPagerAdapter;
     FloatingActionButton fab_addRace;
+    Button buttonUser;
     /**
      * The {@link ViewPager} that will host the section contents.
      */
@@ -61,15 +64,28 @@ public class HomeActivity extends AppCompatActivity {
             }
         });
 
+        buttonUser = (Button) findViewById(R.id.bt_user);
+        buttonUser.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(HomeActivity.this, ProfileActivity.class);
+                startActivityForResult(intent, 1);
+            }
+        });
+
         TabLayout tabLayout = (TabLayout) findViewById(R.id.tl_home);
         tabLayout.setupWithViewPager(mViewPager);
+
+        tabLayout.setTabTextColors(
+                ContextCompat.getColor(getBaseContext(), R.color.colorPrimaryDark),
+                ContextCompat.getColor(getBaseContext(), R.color.colorAccent)
+        );
     }
 
     private void setupViewPager(ViewPager viewPager) {
         SectionsPagerAdapter adapter = new SectionsPagerAdapter(getSupportFragmentManager());
         adapter.addFragment(new CurrentFragment(), "CURRENT");
-        adapter.addFragment(new HistoryFragment(), "HISTORY");
-        adapter.addFragment(new ProfileFragment(), "PROFILE");
+        adapter.addFragment(new RequestFragment(), "REQUESTS");
 
         viewPager.setAdapter(adapter);
     }
