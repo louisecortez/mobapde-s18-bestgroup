@@ -6,7 +6,7 @@ package ph.edu.dlsu.mobapde.tara;
  */
 
 public class User {
-    private long id;
+    private String id;
     private String email;
     private String username;
     private String password;
@@ -19,6 +19,8 @@ public class User {
     private boolean isActive;
 
     private Race currentRace;
+
+    public User() {}
 
     public User(String email, String username, String password) {
         this.email = email;
@@ -34,11 +36,11 @@ public class User {
         numCancelled = 0;
     }
 
-    public long getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(long id) {
+    public void setId(String id) {
         this.id = id;
     }
 

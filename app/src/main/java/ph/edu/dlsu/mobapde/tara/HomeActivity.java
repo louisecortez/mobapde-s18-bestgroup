@@ -16,6 +16,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 
+import com.google.firebase.auth.FirebaseAuth;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +33,7 @@ public class HomeActivity extends AppCompatActivity {
     private SectionsPagerAdapter mSectionsPagerAdapter;
     FloatingActionButton fab_addRace;
     Button buttonUser;
+    FirebaseAuth mAuth;
     /**
      * The {@link ViewPager} that will host the section contents.
      */
@@ -41,16 +44,17 @@ public class HomeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
-        SharedPreferences dsp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
-        String name = dsp.getString("name", null);
+        mAuth = FirebaseAuth.getInstance();
 
-        if(name != null) {
-            // if logged in
+        if (mAuth.getCurrentUser() != null) {
+            //logged in
         } else {
-            Intent i = new Intent(getBaseContext(), MainActivity.class);
+            Intent i = new Intent(HomeActivity.this, MainActivity.class);
             startActivity(i);
             finish();
         }
+
+        //check if login and redirects
 
         mViewPager = (ViewPager) findViewById(R.id.container);
         setupViewPager(mViewPager);

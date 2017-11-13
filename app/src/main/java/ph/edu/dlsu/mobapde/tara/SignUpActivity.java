@@ -20,6 +20,9 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthUserCollisionException;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 
 public class SignUpActivity extends AppCompatActivity implements View.OnClickListener{
@@ -37,6 +40,7 @@ public class SignUpActivity extends AppCompatActivity implements View.OnClickLis
     ProgressBar progressbar;
 
     private FirebaseAuth mAuth;
+    private DatabaseReference db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,6 +68,7 @@ public class SignUpActivity extends AppCompatActivity implements View.OnClickLis
         progressbar = (ProgressBar) findViewById(R.id.progressbar);
 
         mAuth = FirebaseAuth.getInstance();
+        db = FirebaseDatabase.getInstance().getReference();
     }
 
     private void registerUser(){
@@ -119,21 +124,26 @@ public class SignUpActivity extends AppCompatActivity implements View.OnClickLis
                     @Override
                     public void onComplete(@NonNull Task<AuthResult> task) {
                         if (task.isSuccessful()) {
-                            String name = etsemail.getText().toString();
-                            SharedPreferences dsp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
-
-                            SharedPreferences.Editor dspEditor = dsp.edit();
-                            dspEditor.putString("name", name);
-                            dspEditor.commit();
-
                             progressbar.setVisibility(View.GONE);
+
+                            FirebaseUser fu = mAuth.getCurrentUser();
+                            User u = new User();
+                            u.setEmail(fu.getEmail());
+                            u.setActive(true);
+                            u.setNumCancelled(0);
+                            u.setNumEarly(0);
+                            u.setNumLate(0);
+                            u.setNumOnTime(0);
+
+                            db.child("users").child(fu.getUid()).setValue(u);
+
                             Toast.makeText(getBaseContext(), "User registered!",
                                     Toast.LENGTH_SHORT).show();
                             Intent intent = new Intent(SignUpActivity.this, HomeActivity.class);
                             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                             startActivity(intent);
 
-
+                            finish();
                         }else{
 
                             if (task.getException() instanceof FirebaseAuthUserCollisionException)

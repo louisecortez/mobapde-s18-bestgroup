@@ -4,6 +4,7 @@ import com.google.android.gms.location.places.Place;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 
 /**
  * Created by louis on 11/8/2017.
@@ -84,6 +85,16 @@ public class Race {
 
     public void setInProgress(boolean inProgress) {
         this.inProgress = inProgress;
+    }
+
+    public HashMap<String, Object> toMap() {
+        HashMap<String, Object> result = new HashMap<>();
+
+        result.put("title", title);
+        result.put("location", location.getLatLng());
+        result.put("date", date);
+
+        return result;
     }
 
     @Override

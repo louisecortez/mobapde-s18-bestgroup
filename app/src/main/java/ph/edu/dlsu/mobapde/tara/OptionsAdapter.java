@@ -1,4 +1,4 @@
-package edu.dlsu.mobapde.tara;
+package ph.edu.dlsu.mobapde.tara;
 
 import android.graphics.Color;
 import android.support.v7.widget.RecyclerView;

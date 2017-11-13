@@ -1,16 +1,19 @@
 package ph.edu.dlsu.mobapde.tara;
 
+
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.TimePicker;
 import android.widget.Toast;
 
@@ -18,6 +21,8 @@ import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
 import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.location.places.Place;
 import com.google.android.gms.location.places.ui.PlacePicker;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -25,9 +30,6 @@ import java.util.Calendar;
 import java.util.Date;
 
 public class CreateRaceActivity extends AppCompatActivity {
-
-    TextView tvBack;
-
     EditText etTitle;
 
     LinearLayout llDate;
@@ -52,13 +54,21 @@ public class CreateRaceActivity extends AppCompatActivity {
     Date currentDate;
     Place currentPlace;
 
+    DatabaseReference db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_create_race);
 
-        tvBack = (TextView) findViewById(R.id.tv_back);
+        // ADDED TOOLBAR
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar_create);
+        setSupportActionBar(myToolbar);
+
+        ActionBar actionBar = getSupportActionBar();
+        actionBar.setDisplayHomeAsUpEnabled(true);
+
+        // ADDED TOOLBAR END
 
         etTitle = (EditText) findViewById(R.id.et_title);
 
@@ -96,6 +106,7 @@ public class CreateRaceActivity extends AppCompatActivity {
             public void onClick(View v) {
                 try {
                     onCreateRaceButtonClick();
+                    finish();
                 } catch (ParseException e) {
                     e.printStackTrace();
                 }
@@ -125,6 +136,12 @@ public class CreateRaceActivity extends AppCompatActivity {
         currentTitle = etTitle.getText().toString();
 
         currentRace = new Race(currentTitle, currentPlace, currentDate);
+
+        db = FirebaseDatabase.getInstance().getReference();
+
+        String key = db.child("races").push().getKey();
+        db.child("races").child(key).setValue(currentRace.toMap());
+
         Toast t = Toast.makeText(getBaseContext(), "Created: " + currentRace.toString(), Toast.LENGTH_LONG);
         t.show();
     }
@@ -198,5 +215,14 @@ public class CreateRaceActivity extends AppCompatActivity {
                 buttonLocation.setText(address);
             }
         }
+    }
+
+    // ADDED TOOLBAR BACK OPTIONS
+    public boolean onOptionsItemSelected(MenuItem item){
+        Intent i = new Intent(getApplicationContext(), HomeActivity.class);
+        startActivity(i);
+        finish();
+
+        return true;
     }
 }

@@ -20,6 +20,9 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthUserCollisionException;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import ph.edu.dlsu.mobapde.tara.R;
 
@@ -35,6 +38,7 @@ public class LogInActivity extends AppCompatActivity implements View.OnClickList
     ProgressBar progressbar;
 
     private FirebaseAuth mAuth;
+    private DatabaseReference db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,7 +65,7 @@ public class LogInActivity extends AppCompatActivity implements View.OnClickList
         progressbar = (ProgressBar) findViewById(R.id.progressbar);
 
         mAuth = FirebaseAuth.getInstance();
-
+        db = FirebaseDatabase.getInstance().getReference();
     }
 
 
@@ -102,18 +106,17 @@ public class LogInActivity extends AppCompatActivity implements View.OnClickList
             @Override
             public void onComplete(@NonNull Task<AuthResult> task) {
                 if(task.isSuccessful()){
-                    String name = etemail.getText().toString();
-                    SharedPreferences dsp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
-
-                    SharedPreferences.Editor dspEditor = dsp.edit();
-                    dspEditor.putString("name", name);
-                    dspEditor.commit();
-
                     progressbar.setVisibility(View.GONE);
+
+                    FirebaseUser fu = mAuth.getCurrentUser();
+
+                    db.child("users").child(fu.getUid()).child("active").setValue(true);
+
                     Intent intent = new Intent(LogInActivity.this, HomeActivity.class);
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                     startActivity(intent);
 
+                    finish();
                 }else{
                     Toast.makeText(getApplicationContext(), task.getException().getMessage(), Toast.LENGTH_SHORT).show();
                 }

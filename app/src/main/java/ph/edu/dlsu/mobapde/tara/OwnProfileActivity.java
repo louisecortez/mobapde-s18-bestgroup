@@ -1,4 +1,4 @@
-package edu.dlsu.mobapde.tara;
+package ph.edu.dlsu.mobapde.tara;
 
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
