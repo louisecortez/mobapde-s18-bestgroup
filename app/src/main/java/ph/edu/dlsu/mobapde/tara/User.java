@@ -16,11 +16,16 @@ public class User {
     private int numLate;
     private int numCancelled;
 
-    private boolean isActive;
+    private String status;
 
     private Race currentRace;
 
     public User() {}
+
+    public User(String email, String status){
+        this.email = email;
+        this.status = status;
+    }
 
     public User(String email, String username, String password) {
         this.email = email;
@@ -100,12 +105,12 @@ public class User {
         this.numCancelled = numCancelled;
     }
 
-    public boolean isActive() {
-        return isActive;
+    public String getStatus() {
+        return status;
     }
 
-    public void setActive(boolean active) {
-        isActive = active;
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public Race getCurrentRace() {

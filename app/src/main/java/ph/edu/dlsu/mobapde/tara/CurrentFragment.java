@@ -7,6 +7,7 @@ import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.TextView;
 
 /**
@@ -16,6 +17,11 @@ import android.widget.TextView;
 public class CurrentFragment extends Fragment {
 
     TextView tvYourLoc;
+    TextView tvRaceLoc;
+    TextView tvRaceDate;
+    TextView tvRaceTime;
+    TextView tvAddU;
+    Button buttonTara;
 
     @Nullable
     @Override
@@ -23,6 +29,11 @@ public class CurrentFragment extends Fragment {
         View view = inflater.inflate(R.layout.current_fragment, container, false);
 
         tvYourLoc = (TextView) view.findViewById(R.id.tv_yourLoc);
+        tvRaceLoc = (TextView) view.findViewById(R.id.tv_yourLoc);
+        tvRaceDate = (TextView) view.findViewById(R.id.tv_yourLoc);
+        tvRaceTime = (TextView) view.findViewById(R.id.tv_yourLoc);
+        tvAddU = (TextView) view.findViewById(R.id.tv_curradd);
+        buttonTara = (Button) view.findViewById(R.id.button_go);
 
         tvYourLoc.setOnClickListener(new View.OnClickListener() {
             @Override

@@ -25,6 +25,7 @@ import com.firebase.geofire.GeoLocation;
 import com.firebase.geofire.GeoQuery;
 import com.firebase.geofire.GeoQueryEventListener;
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
@@ -38,11 +39,16 @@ import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.h6ah4i.android.widget.verticalseekbar.VerticalSeekBar;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,
@@ -65,6 +71,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static int DISPLACEMENT= 10;
 
     DatabaseReference ref;
+
+    DatabaseReference onlineRef, currentUserRef, counterRef; // from PlayersActivity
+    ArrayList<Tracking> users = new ArrayList<>();              //made to get all users
+    ArrayList<Marker> markers = new ArrayList<>();
     com.firebase.geofire.GeoFire geofire;
     Marker myCurrLoc;
 
@@ -81,7 +91,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
 
 
-        ref = FirebaseDatabase.getInstance().getReference("MyLocation");
+        ref = FirebaseDatabase.getInstance().getReference("Users");
+
+        //added these stuff
+        onlineRef = FirebaseDatabase.getInstance().getReference().child(".info/connected");
+        counterRef = FirebaseDatabase.getInstance().getReference("lastOnline");
+        currentUserRef = FirebaseDatabase.getInstance().getReference("Users")
+                .child(FirebaseAuth.getInstance().getCurrentUser().getUid()); //creates child in lastonline with key uid
+
         geofire = new com.firebase.geofire.GeoFire(ref);
 
         mSeekBar = (VerticalSeekBar) findViewById(R.id.verticalSeekBar);
@@ -160,26 +177,135 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             final double latitude = mLastLocation.getLatitude();
             final double longitude = mLastLocation.getLongitude();
 
-            //update the location in firebase
-            geofire.setLocation("You", new GeoLocation(latitude, longitude), new GeoFire.CompletionListener() {
-                @Override
-                public void onComplete(String key, DatabaseError error) {
-                    //add the marker
-                    if(myCurrLoc != null)
-                        myCurrLoc.remove(); //removes the outdated marker
-                    myCurrLoc = mMap.addMarker(new MarkerOptions()
-                            .position(new LatLng(latitude, longitude))
-                            .title("You"));
+            ref.child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+                    .setValue(new Tracking(FirebaseAuth.getInstance().getCurrentUser().getEmail(),
+                            FirebaseAuth.getInstance().getCurrentUser().getUid(),
+                            String.valueOf(mLastLocation.getLatitude()),String.valueOf(mLastLocation.getLongitude()
+                    ), "Active"));
 
-                    //move camera to this position
-                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 12.0f));
+
+            // ______________________________________________________________________________
+            onlineRef.addValueEventListener(new ValueEventListener() {
+                @Override
+                public void onDataChange(DataSnapshot dataSnapshot) {
+                    if(dataSnapshot.getValue(Boolean.class)){
+                        currentUserRef.onDisconnect().removeValue(); // delete old value
+
+                        //adds an online user to the list
+                        counterRef.child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+                                .setValue(new Tracking(FirebaseAuth.getInstance().getCurrentUser().getEmail(),
+                                        FirebaseAuth.getInstance().getCurrentUser().getUid(),
+                                        String.valueOf(mLastLocation.getLatitude()),String.valueOf(mLastLocation.getLongitude()
+                                ), "Active"));
+                    }
+
+                }
+
+                @Override
+                public void onCancelled(DatabaseError databaseError) {
+
                 }
             });
 
+            //____________________________________________________________________
 
 
-            Log.d("hey", String.format("Your location was changed %f/%f", latitude, longitude));
+            //ref.addValueEventListener(new ValueEventListener() {
+            counterRef.addValueEventListener(new ValueEventListener() {
 
+                @Override
+                public void onDataChange(DataSnapshot dataSnapshot) {
+
+                    for (DataSnapshot noteSnapshot: dataSnapshot.getChildren()){
+                        Tracking note = noteSnapshot.getValue(Tracking.class);
+                        if (!users.contains(note)) //added this
+                            users.add(note);
+
+
+                       /*
+                        //update the location in firebase
+                        geofire.setLocation("You", new GeoLocation(latitude, longitude), new GeoFire.CompletionListener() {
+                            @Override
+                            public void onComplete(String key, DatabaseError error) {
+                                //add the marker
+                                if(myCurrLoc != null)
+                                    myCurrLoc.remove(); //removes the outdated marker
+                                myCurrLoc = mMap.addMarker(new MarkerOptions()
+                                        .position(new LatLng(latitude, longitude))
+                                        .title("You"));
+
+
+                                //move camera to this position
+                                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 12.0f));
+                            }
+                        });
+                        */
+                        //Log.d("hey", String.format("Your location was changed %f/%f", latitude, longitude));
+                        //track.add(note);
+                    }
+
+                    for (int i=0; i<users.size(); i++){
+                        Log.d("ITO", users.get(i).getEmail() + " is here");
+                        Marker m = null;    //******************* added this
+                        if(myCurrLoc != null)
+                            m.remove(); //removes the outdated marker
+                        m = mMap.addMarker(new MarkerOptions().position(new LatLng(Double.parseDouble(users.get(i).getLat()), Double.parseDouble(users.get(i).getLng())))
+                                .title(users.get(i).getEmail())
+                                .snippet(users.get(i).getEmail()));
+                        markers.add(m);
+                    }
+
+                }
+
+                @Override
+                public void onCancelled(DatabaseError databaseError) {
+
+                }
+
+            });
+
+            //List<Tracking> track = new ArrayList<>();
+
+/*
+            ref.addValueEventListener(new ValueEventListener() {
+                @Override
+                public void onDataChange(DataSnapshot dataSnapshot) {
+
+                    for (DataSnapshot noteSnapshot: dataSnapshot.getChildren()){
+                        Tracking note = noteSnapshot.getValue(Tracking.class);
+                        mMap.addMarker(new MarkerOptions().position(new LatLng(Integer.parseInt(note.getLat()), Integer.parseInt(note.getLng()))).title(note.getEmail()));
+
+
+
+                        //update the location in firebase
+                        geofire.setLocation("You", new GeoLocation(latitude, longitude), new GeoFire.CompletionListener() {
+                            @Override
+                            public void onComplete(String key, DatabaseError error) {
+                                //add the marker
+                                if(myCurrLoc != null)
+                                    myCurrLoc.remove(); //removes the outdated marker
+                                myCurrLoc = mMap.addMarker(new MarkerOptions()
+                                        .position(new LatLng(latitude, longitude))
+                                        .title("You"));
+
+
+                                //move camera to this position
+                                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 12.0f));
+                            }
+                        });
+
+                        Log.d("hey", String.format("Your location was changed %f/%f", latitude, longitude));
+                        //track.add(note);
+                    }
+                }
+
+                @Override
+                public void onCancelled(DatabaseError databaseError) {
+
+                }
+            });
+
+        */
         }
         else
             Log.d("hey", "Cannot get your location");
@@ -208,6 +334,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     //This method checks if the device is supported
     private boolean checkPlayServices() {
+        // GooglePlayServicesUtil.isGooglePlayServicesAvailable(this) is depracated daw
         int resultCode = GooglePlayServicesUtil.isGooglePlayServicesAvailable(this);
 
         if(resultCode != ConnectionResult.SUCCESS){
@@ -221,7 +348,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         }
         return true;
-
     }
 
 
@@ -293,7 +419,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         NotificationManager notifManager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
 
         Intent intent = new Intent(this, MapsActivity.class);
-        PendingIntent contentIntent = PendingIntent.getActivity(this,0,intent,PendingIntent.FLAG_IMMUTABLE);
+
+        // FLAG_IMMUTABLE > FLAG_UPDATE_CURRENT
+        PendingIntent contentIntent = PendingIntent.getActivity(this,0,intent,PendingIntent.FLAG_UPDATE_CURRENT);
+
         builder.setContentIntent(contentIntent);
 
         Notification notification = builder.build();

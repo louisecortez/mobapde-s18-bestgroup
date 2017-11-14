@@ -110,7 +110,7 @@ public class LogInActivity extends AppCompatActivity implements View.OnClickList
 
                     FirebaseUser fu = mAuth.getCurrentUser();
 
-                    db.child("users").child(fu.getUid()).child("active").setValue(true);
+                    db.child("users").child(fu.getUid()).child("active").setValue("Active");
 
                     Intent intent = new Intent(LogInActivity.this, HomeActivity.class);
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);

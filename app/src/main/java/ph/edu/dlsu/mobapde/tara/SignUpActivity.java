@@ -129,7 +129,7 @@ public class SignUpActivity extends AppCompatActivity implements View.OnClickLis
                             FirebaseUser fu = mAuth.getCurrentUser();
                             User u = new User();
                             u.setEmail(fu.getEmail());
-                            u.setActive(true);
+                            u.setStatus("Active");
                             u.setNumCancelled(0);
                             u.setNumEarly(0);
                             u.setNumLate(0);
