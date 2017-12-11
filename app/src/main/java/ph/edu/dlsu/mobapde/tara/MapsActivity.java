@@ -2,21 +2,30 @@ package ph.edu.dlsu.mobapde.tara;
 
 import android.*;
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
+import android.net.Uri;
+import android.os.Build;
+import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.Toast;
 
@@ -28,6 +37,9 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingClient;
+import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
@@ -39,7 +51,12 @@ import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -48,15 +65,18 @@ import com.google.firebase.database.ValueEventListener;
 import com.h6ah4i.android.widget.verticalseekbar.VerticalSeekBar;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener,
-        LocationListener{
+        LocationListener,OnCompleteListener<Void> {
 
     private GoogleMap mMap;
+    private LatLng notifArea;
 
     //Play Services location
     private static final int MY_PERMISSION_REQUEST_CODE = 1234;
@@ -68,17 +88,44 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private static int UPDATE_INTERVAL = 5000;
     private static int FASTEST_INTERVAL = 3000;
-    private static int DISPLACEMENT= 10;
+    private static int DISPLACEMENT = 10;
 
-    DatabaseReference ref;
+    //DatabaseReference ref;
 
     DatabaseReference onlineRef, currentUserRef, counterRef; // from PlayersActivity
-    ArrayList<Tracking> users = new ArrayList<>();              //made to get all users
-    ArrayList<Marker> markers = new ArrayList<>();
-    com.firebase.geofire.GeoFire geofire;
+    private  static HashMap<String, Tracking> users = new HashMap<>();              //made to get all users
+
+    //GeoFire geofire;
     Marker myCurrLoc;
 
     VerticalSeekBar mSeekBar;
+
+    /**
+     * Tracks whether the user requested to add or remove geofences, or to do neither.
+     */
+    private enum PendingGeofenceTask {
+        ADD, REMOVE, NONE
+    }
+
+    /**
+     * Provides access to the Geofencing API.
+     */
+    private GeofencingClient mGeofencingClient;
+
+    /**
+     * The list of geofences used in this sample.
+     */
+    private ArrayList<Geofence> mGeofenceList;
+    /**
+     * Used when requesting to add or remove geofences.
+     */
+    private PendingIntent mGeofencePendingIntent;
+
+    // Buttons for kicking off the process of adding or removing geofences.
+    private Button mAddGeofencesButton;
+    private Button mRemoveGeofencesButton;
+
+    private PendingGeofenceTask mPendingGeofenceTask = PendingGeofenceTask.NONE;
 
 
     @Override
@@ -91,15 +138,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
 
 
-        ref = FirebaseDatabase.getInstance().getReference("Users");
+
+        //ref = FirebaseDatabase.getInstance().getReference("Users");
 
         //added these stuff
         onlineRef = FirebaseDatabase.getInstance().getReference().child(".info/connected");
         counterRef = FirebaseDatabase.getInstance().getReference("lastOnline");
-        currentUserRef = FirebaseDatabase.getInstance().getReference("Users")
+        currentUserRef = FirebaseDatabase.getInstance().getReference("lastOnline")
                 .child(FirebaseAuth.getInstance().getCurrentUser().getUid()); //creates child in lastonline with key uid
 
-        geofire = new com.firebase.geofire.GeoFire(ref);
+        //geofire = new GeoFire(ref);
 
         mSeekBar = (VerticalSeekBar) findViewById(R.id.verticalSeekBar);
         mSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -120,7 +168,309 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         });
 
+        // Empty list for storing geofences.
+        mGeofenceList = new ArrayList<>();
+
+        // Initially set the PendingIntent used in addGeofences() and removeGeofences() to null.
+        mGeofencePendingIntent = null;
+
+        // Get the geofences used. Geofence data is hard coded in this sample.
+        populateGeofenceList();
+
+        mGeofencingClient = LocationServices.getGeofencingClient(this);
+
+        addGeofences(); //+++++++++++++++++++++++++++++++++++++++++
+
         setupLocation();
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+
+        if (!checkPermissions()) {
+            requestPermissions();
+        } else {
+            performPendingGeofenceTask();
+        }
+    }
+
+
+    /**
+     * Builds and returns a GeofencingRequest. Specifies the list of geofences to be monitored.
+     * Also specifies how the geofence notifications are initially triggered.
+     */
+    private GeofencingRequest getGeofencingRequest() {
+        GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
+
+        // The INITIAL_TRIGGER_ENTER flag indicates that geofencing service should trigger a
+        // GEOFENCE_TRANSITION_ENTER notification when the geofence is added and if the device
+        // is already inside that geofence.
+        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
+
+        // Add the geofences to be monitored by geofencing service.
+        builder.addGeofences(mGeofenceList);
+
+        // Return a GeofencingRequest.
+        return builder.build();
+    }
+
+
+    /**
+     * Adds geofences, which sets alerts to be notified when the device enters or exits one of the
+     * specified geofences. Handles the success or failure results returned by addGeofences().
+     */
+    public void addGeofencesButtonHandler(View view) {
+        if (!checkPermissions()) {
+            mPendingGeofenceTask = PendingGeofenceTask.ADD;
+            requestPermissions();
+            return;
+        }
+        addGeofences();
+    }
+
+    /**
+     * Adds geofences. This method should be called after the user has granted the location
+     * permission.
+     */
+    @SuppressWarnings("MissingPermission")
+    private void addGeofences() {
+
+        if (!checkPermissions()) {
+            showSnackbar(getString(R.string.insufficient_permissions));
+            return;
+        }
+
+        //++++++++++++++++++++++++++++
+        //mGeofencingClient.addGeofences(getGeofencingRequest(), getGeofencePendingIntent())
+        //        .addOnCompleteListener(this);
+        //++++++++++++++++++++++++++++
+
+        mGeofencingClient.addGeofences(getGeofencingRequest(), getGeofencePendingIntent())
+                .addOnSuccessListener(this, new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Log.d("ito", "Geofence is added");
+                        // Geofences added
+                        // ...
+                    }
+                })
+                .addOnFailureListener(this, new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.d("ito", "Geofence is NOT added");
+                        // Failed to add geofences
+                        // ...
+                    }
+                });
+    }
+
+
+    /**
+     * Removes geofences, which stops further notifications when the device enters or exits
+     * previously registered geofences.
+     */
+    public void removeGeofencesButtonHandler(View view) {
+        if (!checkPermissions()) {
+            mPendingGeofenceTask = PendingGeofenceTask.REMOVE;
+            requestPermissions();
+            return;
+        }
+        removeGeofences();
+    }
+
+
+    /**
+     * Removes geofences. This method should be called after the user has granted the location
+     * permission.
+     */
+    @SuppressWarnings("MissingPermission")
+    private void removeGeofences() {
+        if (!checkPermissions()) {
+            showSnackbar(getString(R.string.insufficient_permissions));
+            return;
+        }
+
+        mGeofencingClient.removeGeofences(getGeofencePendingIntent()).addOnCompleteListener(this);
+    }
+
+
+
+    /**
+     * Runs when the result of calling {@link #addGeofences()} and/or {@link #removeGeofences()}
+     * is available.
+     * @param task the resulting Task, containing either a result or error.
+     */
+    @RequiresApi(api = Build.VERSION_CODES.GINGERBREAD)
+    @Override
+    public void onComplete(@NonNull Task<Void> task) {
+        mPendingGeofenceTask = PendingGeofenceTask.NONE;
+        if (task.isSuccessful()) {
+            updateGeofencesAdded(!getGeofencesAdded());
+            setButtonsEnabledState();
+
+            int messageId = getGeofencesAdded() ? R.string.geofences_added :
+                    R.string.geofences_removed;
+            Toast.makeText(this, getString(messageId), Toast.LENGTH_SHORT).show();
+        } else {
+            // Get the status code for the error and log it using a user-friendly message.
+            String errorMessage = GeofenceErrorMessages.getErrorString(this, task.getException());
+            Log.w("woo", errorMessage);
+        }
+    }
+
+    /**
+     * Gets a PendingIntent to send with the request to add or remove Geofences. Location Services
+     * issues the Intent inside this PendingIntent whenever a geofence transition occurs for the
+     * current list of geofences.
+     *
+     * @return A PendingIntent for the IntentService that handles geofence transitions.
+     */
+    private PendingIntent getGeofencePendingIntent() {
+        // Reuse the PendingIntent if we already have it.
+        if (mGeofencePendingIntent != null) {
+            return mGeofencePendingIntent;
+        }
+        Intent intent = new Intent(this, GeofenceTransitionsIntentService.class);
+        // We use FLAG_UPDATE_CURRENT so that we get the same pending intent back when calling
+        // addGeofences() and removeGeofences().
+        return PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    /**
+     * This sample hard codes geofence data. A real app might dynamically create geofences based on
+     * the user's location.
+     */
+    private void populateGeofenceList() {
+        Log.d("woo", "populating geofence");
+        for (Map.Entry<String, LatLng> entry : Constants.BAY_AREA_LANDMARKS.entrySet()) {
+
+            mGeofenceList.add(new Geofence.Builder()
+                    .setRequestId(entry.getKey())
+                    .setCircularRegion(
+                            entry.getValue().latitude,
+                            entry.getValue().longitude,
+                            Constants.GEOFENCE_RADIUS_IN_METERS
+                    )
+                    .setExpirationDuration(Constants.GEOFENCE_EXPIRATION_IN_MILLISECONDS)
+                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER |
+                            Geofence.GEOFENCE_TRANSITION_EXIT)
+                    .build());
+        }
+    }
+
+    /**
+     * Ensures that only one button is enabled at any time. The Add Geofences button is enabled
+     * if the user hasn't yet added geofences. The Remove Geofences button is enabled if the
+     * user has added geofences.
+     */
+    private void setButtonsEnabledState() {
+        if (getGeofencesAdded()) {
+            mAddGeofencesButton.setEnabled(false);
+            mRemoveGeofencesButton.setEnabled(true);
+        } else {
+            mAddGeofencesButton.setEnabled(true);
+            mRemoveGeofencesButton.setEnabled(false);
+        }
+    }
+
+    /**
+     * Shows a {@link Snackbar} using {@code text}.
+     *
+     * @param text The Snackbar text.
+     */
+    private void showSnackbar(final String text) {
+        View container = findViewById(android.R.id.content);
+        if (container != null) {
+            Snackbar.make(container, text, Snackbar.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * Shows a {@link Snackbar}.
+     *
+     * @param mainTextStringId The id for the string resource for the Snackbar text.
+     * @param actionStringId   The text of the action item.
+     * @param listener         The listener associated with the Snackbar action.
+     */
+    private void showSnackbar(final int mainTextStringId, final int actionStringId,
+                              View.OnClickListener listener) {
+        Snackbar.make(
+                findViewById(android.R.id.content),
+                getString(mainTextStringId),
+                Snackbar.LENGTH_INDEFINITE)
+                .setAction(getString(actionStringId), listener).show();
+    }
+
+    /**
+     * Returns true if geofences were added, otherwise false.
+     */
+    private boolean getGeofencesAdded() {
+        return PreferenceManager.getDefaultSharedPreferences(this).getBoolean(
+                Constants.GEOFENCES_ADDED_KEY, false);
+    }
+
+    /**
+     * Stores whether geofences were added ore removed in {@link SharedPreferences};
+     *
+     * @param added Whether geofences were added or removed.
+     */
+    @RequiresApi(api = Build.VERSION_CODES.GINGERBREAD)
+    private void updateGeofencesAdded(boolean added) {
+        PreferenceManager.getDefaultSharedPreferences(this)
+                .edit()
+                .putBoolean(Constants.GEOFENCES_ADDED_KEY, added)
+                .apply();
+    }
+
+    /**
+     * Performs the geofencing task that was pending until location permission was granted.
+     */
+    private void performPendingGeofenceTask() {
+        if (mPendingGeofenceTask == PendingGeofenceTask.ADD) {
+            addGeofences();
+        } else if (mPendingGeofenceTask == PendingGeofenceTask.REMOVE) {
+            removeGeofences();
+        }
+    }
+
+    /**
+     * Return the current state of the permissions needed.
+     */
+    private boolean checkPermissions() {
+        int permissionState = ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION);
+        return permissionState == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestPermissions() {
+        boolean shouldProvideRationale =
+                ActivityCompat.shouldShowRequestPermissionRationale(this,
+                        Manifest.permission.ACCESS_FINE_LOCATION);
+
+        // Provide an additional rationale to the user. This would happen if the user denied the
+        // request previously, but didn't check the "Don't ask again" checkbox.
+        if (shouldProvideRationale) {
+            Log.i("woo", "Displaying permission rationale to provide additional context.");
+            showSnackbar(R.string.permission_rationale, android.R.string.ok,
+                    new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            // Request permission
+                            ActivityCompat.requestPermissions(MapsActivity.this,
+                                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                                    MY_PERMISSION_REQUEST_CODE);
+                        }
+                    });
+        } else {
+            Log.i("woo", "Requesting permission");
+            // Request permission. It's possible this can be auto answered if device policy
+            // sets the permission in a given state or the user denied the permission
+            // previously and checked "Never ask again".
+            ActivityCompat.requestPermissions(MapsActivity.this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    MY_PERMISSION_REQUEST_CODE);
+        }
     }
 
     //Press Ctrl+O
@@ -128,14 +478,50 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch(requestCode){
+        switch (requestCode) {
             case MY_PERMISSION_REQUEST_CODE:
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED){
-                    if(checkPlayServices()){
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    if (checkPlayServices()) {
                         buildGoogleApiClient();
                         createLocationRequest();
                         displayLocation();
                     }
+                }
+                if (grantResults.length <= 0) {
+                    // If user interaction was interrupted, the permission request is cancelled and you
+                    // receive empty arrays.
+                    Log.i("woo", "User interaction was cancelled.");
+                } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Log.i("woo", "Permission granted.");
+                    performPendingGeofenceTask();
+                } else {
+                    // Permission denied.
+
+                    // Notify the user via a SnackBar that they have rejected a core permission for the
+                    // app, which makes the Activity useless. In a real app, core permissions would
+                    // typically be best requested during a welcome-screen flow.
+
+                    // Additionally, it is important to remember that a permission might have been
+                    // rejected without asking the user for permission (device policy or "Never ask
+                    // again" prompts). Therefore, a user interface affordance is typically implemented
+                    // when permissions are denied. Otherwise, your app could appear unresponsive to
+                    // touches or interactions which have required permissions.
+                    showSnackbar(R.string.permission_denied_explanation, R.string.settings,
+                            new View.OnClickListener() {
+                                @Override
+                                public void onClick(View view) {
+                                    // Build intent that displays the App settings screen.
+                                    Intent intent = new Intent();
+                                    intent.setAction(
+                                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                                    Uri uri = Uri.fromParts("package",
+                                            BuildConfig.APPLICATION_ID, null);
+                                    intent.setData(uri);
+                                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    startActivity(intent);
+                                }
+                            });
+                    mPendingGeofenceTask = PendingGeofenceTask.NONE;
                 }
                 break;
         }
@@ -143,19 +529,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     //this checks if the app can access the coarse and the fine location
     private void setupLocation() {
-        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED){
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             //REQUEST RUNTIME PERMISSION
-            ActivityCompat.requestPermissions(this, new String[] {
+            ActivityCompat.requestPermissions(this, new String[]{
                     Manifest.permission.ACCESS_COARSE_LOCATION,
                     Manifest.permission.ACCESS_FINE_LOCATION
             }, MY_PERMISSION_REQUEST_CODE);
 
 
-
-        }
-        else{
-            if(checkPlayServices()){
+        } else {
+            if (checkPlayServices()) {
                 buildGoogleApiClient();
                 createLocationRequest();
                 displayLocation();
@@ -173,30 +557,32 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
 
-        if(mLastLocation != null){
+        if (mLastLocation != null) {
             final double latitude = mLastLocation.getLatitude();
             final double longitude = mLastLocation.getLongitude();
 
-            ref.child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+            /*ref.child(FirebaseAuth.getInstance().getCurrentUser().getUid())
                     .setValue(new Tracking(FirebaseAuth.getInstance().getCurrentUser().getEmail(),
                             FirebaseAuth.getInstance().getCurrentUser().getUid(),
                             String.valueOf(mLastLocation.getLatitude()),String.valueOf(mLastLocation.getLongitude()
-                    ), "Active"));
+                    ), "Active"));*/
 
 
             // ______________________________________________________________________________
             onlineRef.addValueEventListener(new ValueEventListener() {
                 @Override
                 public void onDataChange(DataSnapshot dataSnapshot) {
-                    if(dataSnapshot.getValue(Boolean.class)){
+                    if (dataSnapshot.getValue(Boolean.class)) {
                         currentUserRef.onDisconnect().removeValue(); // delete old value
 
                         //adds an online user to the list
                         counterRef.child(FirebaseAuth.getInstance().getCurrentUser().getUid())
                                 .setValue(new Tracking(FirebaseAuth.getInstance().getCurrentUser().getEmail(),
                                         FirebaseAuth.getInstance().getCurrentUser().getUid(),
-                                        String.valueOf(mLastLocation.getLatitude()),String.valueOf(mLastLocation.getLongitude()
+                                        String.valueOf(mLastLocation.getLatitude()), String.valueOf(mLastLocation.getLongitude()
                                 ), "Active"));
+
+
                     }
 
                 }
@@ -210,53 +596,103 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             //____________________________________________________________________
 
 
-            //ref.addValueEventListener(new ValueEventListener() {
             counterRef.addValueEventListener(new ValueEventListener() {
+            //counterRef.addChildEventListener(new ChildEventListener() {
+                //int ctr = 0;
 
+
+                @RequiresApi(api = Build.VERSION_CODES.HONEYCOMB)
                 @Override
                 public void onDataChange(DataSnapshot dataSnapshot) {
 
                     for (DataSnapshot noteSnapshot: dataSnapshot.getChildren()){
                         Tracking note = noteSnapshot.getValue(Tracking.class);
-                        if (!users.contains(note)) //added this
-                            users.add(note);
+                       Log.d("ITO", "HASH MAP: " + users);
+                       if (users.containsKey(note.getUid()))
+                           users.get(note.getUid()).getM().remove();
 
+                       users.put(note.getUid(), note);
 
-                       /*
-                        //update the location in firebase
-                        geofire.setLocation("You", new GeoLocation(latitude, longitude), new GeoFire.CompletionListener() {
-                            @Override
-                            public void onComplete(String key, DatabaseError error) {
-                                //add the marker
-                                if(myCurrLoc != null)
-                                    myCurrLoc.remove(); //removes the outdated marker
-                                myCurrLoc = mMap.addMarker(new MarkerOptions()
-                                        .position(new LatLng(latitude, longitude))
-                                        .title("You"));
+                        if(Double.parseDouble(note.getLat()) == notifArea.latitude && Double.parseDouble(note.getLng()) == notifArea.longitude)
+                            sendNotification("Tara", String.format("%s is at the finish line", note.getEmail()));
 
-
-                                //move camera to this position
-                                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 12.0f));
-                            }
-                        });
-                        */
-                        //Log.d("hey", String.format("Your location was changed %f/%f", latitude, longitude));
-                        //track.add(note);
                     }
 
-                    for (int i=0; i<users.size(); i++){
-                        Log.d("ITO", users.get(i).getEmail() + " is here");
-                        Marker m = null;    //******************* added this
-                        if(myCurrLoc != null)
-                            m.remove(); //removes the outdated marker
-                        m = mMap.addMarker(new MarkerOptions().position(new LatLng(Double.parseDouble(users.get(i).getLat()), Double.parseDouble(users.get(i).getLng())))
-                                .title(users.get(i).getEmail())
-                                .snippet(users.get(i).getEmail()));
-                        markers.add(m);
+                    for (String key: users.keySet()){
+
+                        Log.d("ITO", users.get(key).getEmail() + " has the M " + users.get(key).getM());
+
+                        //Marker m = null;
+                        if(users.get(key).getM() != null) {
+                            Log.d("ITO", "@@@@@@@@@@@@@@" + users.get(key).getEmail() + " changed position!");
+                            users.get(key).getM().remove(); //removes the outdated marker
+                        }
+                        users.get(key).setM(mMap.addMarker(new MarkerOptions().position(new LatLng(Double.parseDouble(users.get(key).getLat()), Double.parseDouble(users.get(key).getLng())))
+                                .title(users.get(key).getEmail())
+                                .snippet(users.get(key).getEmail())));
+                            Log.d("ITO", "****************" + users.get(key).getEmail() + " has the M " + users.get(key).getM());
+                        //markers.add(m);
+                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 12.0f));
+
                     }
 
                 }
 
+
+                /*
+                @Override
+                public void onChildAdded(DataSnapshot dataSnapshot, String s) {
+                    Log.d("ITO", "LAMAN NG HASHMAP USERS: " + users);
+                    Tracking newUser = dataSnapshot.getValue(Tracking.class);
+                    newUser.setM(mMap.addMarker(new MarkerOptions().position(new LatLng(Double.parseDouble(newUser.getLat()), Double.parseDouble(newUser.getLng())))
+                            .title(newUser.getEmail())
+                            .snippet(newUser.getEmail())));
+                    Log.d("ITO", "****************" + newUser.getEmail() + " has the M " + newUser.getM());
+                    //markers.add(m);
+                    if (users.containsKey(s)) {
+                        Log.d("ITO", ">>>>>>>>>>  " + users.get(s).getEmail() + " was removed");
+                        users.get(newUser.getUid()).getM().remove();
+                        users.remove(newUser.getUid());
+                    }
+
+                    Log.d("ITO", ">!>!>!>!  " + newUser.getEmail() + " was added");
+                    users.put(newUser.getUid(), newUser);
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 12.0f));
+                }
+
+                @Override
+                public void onChildChanged(DataSnapshot dataSnapshot, String s) {
+                    Tracking newUser = dataSnapshot.getValue(Tracking.class);
+                    if (users.containsKey(s)) {
+                        users.get(newUser.getUid()).getM().remove();
+                        users.remove(newUser.getUid());
+                    }
+
+                    newUser.setM(mMap.addMarker(new MarkerOptions().position(new LatLng(Double.parseDouble(newUser.getLat()), Double.parseDouble(newUser.getLng())))
+                            .title(newUser.getEmail())
+                            .snippet(newUser.getEmail())));
+                    users.put(newUser.getUid(), newUser);
+                    Log.d("ITO", "@@@@@@@@@@@" + newUser.getEmail() + " changed position!");
+                }
+
+                @Override
+                public void onChildRemoved(DataSnapshot dataSnapshot) {
+                    Tracking removedUser = dataSnapshot.getValue(Tracking.class);
+
+                    if(users.get(removedUser.getUid()) != null) {
+                        users.get(removedUser.getUid()).getM().remove();
+                        users.remove(removedUser.getUid());
+                        Log.d("ITO", "!!!!!!!!!!!" + removedUser.getEmail() + " was removed!");
+
+
+                    }
+                }
+
+                @Override
+                public void onChildMoved(DataSnapshot dataSnapshot, String s) {
+
+                }
+                */
                 @Override
                 public void onCancelled(DatabaseError databaseError) {
 
@@ -306,8 +742,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             });
 
         */
-        }
-        else
+        } else
             Log.d("hey", "Cannot get your location");
     }
 
@@ -337,10 +772,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // GooglePlayServicesUtil.isGooglePlayServicesAvailable(this) is depracated daw
         int resultCode = GooglePlayServicesUtil.isGooglePlayServicesAvailable(this);
 
-        if(resultCode != ConnectionResult.SUCCESS){
-            if(GooglePlayServicesUtil.isUserRecoverableError(resultCode))
+        if (resultCode != ConnectionResult.SUCCESS) {
+            if (GooglePlayServicesUtil.isUserRecoverableError(resultCode))
                 GooglePlayServicesUtil.getErrorDialog(resultCode, this, PLAY_SERVICES_RESOLUTION_REQUEST).show();
-            else{
+            else {
                 Toast.makeText(this, "This device is not supported", Toast.LENGTH_SHORT).show();
                 finish();
             }
@@ -349,8 +784,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
         return true;
     }
-
-
 
 
     /**
@@ -366,9 +799,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        mMap.setMyLocationEnabled(true);
+
         //create an area where you will get a notif
 
-        LatLng notifArea = new LatLng(14.657540, 121.013261);    //BASTA DAPAT PWEDENG PALITAN 'TO!!!
+
+
+        notifArea = new LatLng(14.657540, 121.013261);    //BASTA DAPAT PWEDENG PALITAN 'TO!!!
+       /*
         mMap.addCircle(new CircleOptions()
                 .center(notifArea)
                 .radius(500) //THIS IS IN METERS PO
@@ -376,21 +824,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .fillColor(0x220000FF)
                 .strokeWidth(5.0f)
         );
+        (/
+
 
         //ADD GEOQUERY HERE
         //0.05f = 50 meters
 
-        GeoQuery geoQuery = geofire.queryAtLocation(new GeoLocation(notifArea.latitude, notifArea.longitude), 0.5f);
+
+        /*GeoQuery geoQuery = geofire.queryAtLocation(new GeoLocation(notifArea.latitude, notifArea.longitude), 0.5f);
         geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
             @Override
             public void onKeyEntered(String key, GeoLocation location) {
-                sendNotification("hey", String.format("Almost there, %s !", key));
+                sendNotification("Tara", String.format("%s is close to the destination!", key));
 
             }
 
             @Override
             public void onKeyExited(String key) {
-                sendNotification("hey", String.format("But... %s ?", key));
+                sendNotification("Tara", String.format("%s passed the destination ????", key));
             }
 
             @Override
@@ -407,10 +858,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             public void onGeoQueryError(DatabaseError error) {
                 Log.e("error", ""+error);
             }
-        });
+
+        });*/
+
 
     }
 
+    @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
+    @RequiresApi(api = Build.VERSION_CODES.HONEYCOMB)
     private void sendNotification(String hey, String format) {
         Notification.Builder builder = new Notification.Builder(this)
                 .setSmallIcon(R.drawable.logo)
@@ -463,4 +918,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mLastLocation = location;
         displayLocation();
     }
+
+
 }
